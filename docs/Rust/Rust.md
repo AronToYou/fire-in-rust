@@ -1,5 +1,25 @@
 > [!outline]- Table of Contents
 > - [[Guidelines]] 
+
+# Tips
+## Comparing Code Directions
+- `{sh}cargo bench`
+
+## Analyzing Memory: Stack/Heap
+- `{rust}std::mem::size_of::<T>()`
+	- `{rust}std::mem::size_of::<Sim<230, 320, fn((f32, f32)) -> (f32, f32)>>()`
+- Enable backtraces `{rust}RUST_BACKTRACE=1 cargo run`
+- increase stack size 
+	- `ulimit -s`
+	- `{rust}std::thread::Builder::new().stack_size(16*1024*1024)`
+- understand codegen sizes with generics 
+	- `{rust}cargo-llvm-lines`
+	- `{rust}cargo-bloat`
+
+## Casting For Identical Memory Layouts
+- `{rust}bytemuck::cast_slice()`
+	- `{rust}bytemuck::{Zeroable, Pod}`
+
 # List of commands
 
 | cmd                     | Description                                                     |
@@ -19,6 +39,12 @@
 
 # Syntax
 ## Variables
+- immutable by default
+- shadowing is returned after scope
+- `{rust}fn func(s: String)` : ownership adopted = pointer
+- `{rust}fn func(s: &String)` : immutable reference = pointer to pointer
+- `{rust}fn func(s: &mut String)` : mutable reference
+
 ```rust
 use std::io;
 use rand::Rng;
@@ -108,5 +134,40 @@ fn main() {
 	
 	let r2: &i32 = &*x;      // r2 points to the heap value directly
 	let c: i32 = *r2;    // so only one dereference is needed to read it
+}
+```
+
+## Traits
+```rust
+trait Draw {
+	fn draw(&self);
+}
+```
+### with trait object
+```rust
+struct Screen {
+	components: Vec<Box<dyn Draw>>
+}
+
+impl Screen {
+	fn run(&self) {
+		for comp in self.components.iter() {
+			comp.draw();
+		}
+	}
+}
+```
+### with generics
+```rust
+struct Screen<T: Draw> {
+	components: Vec<T>
+}
+
+impl<T> Screen<T> where T: Draw {
+	fn run(&self) {
+		for comp in self.components.iter() {
+			comp.draw();
+		}
+	}
 }
 ```
