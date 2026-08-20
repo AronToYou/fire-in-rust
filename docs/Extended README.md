@@ -11,41 +11,45 @@ Velocity updated for incompressible flow (Stam's 4-step loop)
 1. Implicit surface where ($\phi=0$) defines the interface between
 	- **Fuel** ($\phi>0$) blue-core reaction zone
 	- **Hot Gas** ($\phi<0$)
-2. velocity of surface
-$$w = \vec{u}_{fuel} + S\vec{n}$$
-3. Implicit surface unit normal vector (central differencing)
+2. Implicit surface unit normal vector (central differencing)
 $$\vec{n} = \nabla\phi/|\nabla\phi|$$
-4. Time derivative of level set (upwind differencing for $\nabla\phi$)
-$$\phi_t = -(\vec{u}_f + S\vec{n})\cdot\nabla\phi$$
+3. velocity of surface
+$$w = \vec{u}_{fuel} + S\vec{n}$$
+4. Time derivative of level set
+$$\dot{\phi} = -(\vec{u}_f + S\vec{n})\cdot\nabla\phi$$
+	1. (upwind differencing for $\nabla\phi$)
+	2. Application of time derivative
+$$\phi_{t+1} = \phi_t -(\vec{u}_f + S\vec{n})\cdot\nabla\phi_t\frac{\Delta t}{h}$$
+
 - evolve **fuel** and **hot gas** velocity fields separately
 ## B) Velocity updated via Stam's 4-step loop[^3]
 $$\vec{\text{w}}_0(\vec{x}) := \vec{u}(\vec{x},\; t)$$
 $$\vec{\text{w}}_0 = \vec{u}_t$$
 $$\vec{\text{w}}_0\rightarrow\text{add force}\rightarrow\vec{\text{w}}_1\rightarrow\text{advect}\rightarrow\vec{\text{w}}_2\rightarrow\text{diffuse}\rightarrow\vec{\text{w}}_3\rightarrow\text{project}\rightarrow\vec{\text{w}}_4$$
 $$\vec{u}(\vec{x},\; t+\Delta t) = \vec{\text{w}}_4(\vec{x})$$
-### 1. **Add Force** (before advection)[^2]
- 1. Buoyancy
+ 1. **Add Force** (before advection)[^2]
+	 1. Buoyancy
 $$f_{buoy} = \alpha(T - T_{air})\hat{z}$$
-2. Vorticity Confinement
-	1. Vorticity vector
+	2. Vorticity Confinement
+		1. Vorticity vector
 $$\vec{\omega} = \nabla\times\vec{u}$$
-	2. Normalized vorticity location vector (central differencing)
+		2. Normalized vorticity location vector (central differencing)
 $$\vec{N} = \nabla|\vec{\omega}|/|\nabla|\vec{\omega}||$$
-	 3. Force of vorticity confinement
+		3. Force of vorticity confinement
  $$f_{conf} = \varepsilon h(\vec{N}\times\vec{\omega})$$
- 3. Add Force
+	 3. Add Force
 $$\vec{\text{w}}_1 = \vec{u}_t + \triangle t\ \vec{f}$$
-### 2. **Advection**[^3]
+2. **Advection**[^3]
 - Stable Semi-Lagrangian
 	- `semi_lagrangian_advect`
 $$\text{Advection of }\vec{\text{w}}_1(P_0)\text{ where } P_0 := (x_0, y_0)$$
-1. backtrace half-step
+	1. backtrace half-step
 $$P_{-1/2} = P_0 - \vec{\text{w}}_1(P_0)\frac{\Delta t}{2h}$$
-2. sample velocity* 
+	2. sample velocity* 
 $$\vec{\text{w}}_1(P_{-1/2}) \approx \text{bilinear\_sample}(\vec{\text{w}}_1,\; P_{-1/2})$$
-3. backtrace full-step
+	3. backtrace full-step
 $$P_{-1} = P_0 - \vec{\text{w}}_1(P_{-1/2})\frac{\Delta t}{h}$$
-4. sample velocity*
+	4. sample velocity*
 $$\vec{\text{w}}_2(P_0) \approx \vec{\text{w}}_1(P_{-1}) \approx \text{bilinear\_sample}(\vec{\text{w}}_1,\; P_{-1})$$
 #### **\*Expansion coupling** across front via **ghost normal velocity** 
 - (mass conservation) $\nabla\cdot\vec{u}=0$
@@ -54,12 +58,12 @@ $$\vec{\text{w}}_2(P_0) \approx \vec{\text{w}}_1(P_{-1}) \approx \text{bilinear\
 		- (normal velocity of fuel) $V_f = \vec{u}_f\cdot\vec{n}$
 	- $\vec{u}_h^{ghost} = V_h^{ghost}\vec{n} + \vec{u}_f - (\vec{u}_f\cdot\vec{n})\vec{n}$
 	- $\vec{u}_h^{ghost} = (\rho_f/\rho_h - 1)S + \vec{u}_f$
-### 3. **Diffusion**
+3. **Diffusion**
 - with implicit diffusion
 	- `diffuse_velocity`
 $$\pdv{\vec{\text{w}}_2}{t} = \nu\nabla^2\vec{\text{w}}_2$$
 $$\vec{\text{w}}_3 = \vec{\text{w}}_2 + (\nu\Delta t)\nabla^2\vec{\text{w}}_2$$
-### 4. **Projection**
+4. **Projection**
 - Onto divergent free fields
 - and a Poisson solve for pressure
 	- `project_hot`

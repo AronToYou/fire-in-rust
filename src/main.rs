@@ -6,7 +6,7 @@ mod grid;
 const MIN_NORM: f32 = 1e-8;
 
 
-// ---------------- Utility Functions ----------------
+// --------------------------------------------- Utility Functions ---------------------------------------------
 fn new_sim<const NX: usize, const NY: usize>(p: Params) -> Sim<NX, NY, impl Fn((f32, f32)) -> (f32, f32)> {
     let maxx = (NX as f32) - 1.001;
     let maxy = (NY as f32) - 1.001;
@@ -15,7 +15,7 @@ fn new_sim<const NX: usize, const NY: usize>(p: Params) -> Sim<NX, NY, impl Fn((
 }
 
 
-// ---------------- Simulation Parameters ----------------
+// ------------------------------------------- Simulation Parameters -------------------------------------------
 #[derive(Clone, Copy)]
 struct Params {
     // Grid Parameters //
@@ -39,7 +39,7 @@ struct Params {
 }
 
 
-// ---------------- Simulation State ----------------
+// --------------------------------------------- Simulation State ---------------------------------------------
 struct Sim<const NX: usize, const NY: usize, C> where C: Fn((f32, f32)) -> (f32, f32) {
     p: Params,  // Simulation parameters (defined above)
     clamp_xy: C,  // clamping function for coordinates
@@ -110,22 +110,22 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
     }
 
 
-    // ----------------- A) Thin-flame Level Set Propagation -----------------
+    // ---------------------------------- A) Thin-flame Level Set Propagation ----------------------------------
     /// Updates the level set using upwind one-sided differencing to estimate spatial derivatives
     fn update_levelset(&mut self) {
         let k_react = self.p.k_react;
-        self.tmp.copy_from_slice(&*self.phi);  // TODO
+        self.tmp.copy_from_slice(&*self.phi);  // @TODO
         for x in 1..NX-1 {
             for y in 1..NY-1 {
-                // (1.3) (unscaled) Central differencing for normed gradient (∇φ/|∇φ|) //
+                // A) 2. (unscaled) Central differencing for normed gradient (∇φ/|∇φ|) //
                 let gx = self.phi[x+1][y] - self.phi[x-1][y];  // gradient x-component
                 let gy = self.phi[x][y+1] - self.phi[x][y-1];  // gradient y-component
                 let norm = (gx*gx + gy*gy).sqrt().max(MIN_NORM);  // gradient norm
                 
-                // (1.2) Velocity of implicit surface (where φ==0) //
+                // A) 3. Velocity of implicit surface (where φ==0) //
                 let P(wx, wy) = self.u[x][y] + P(gx, gy)*(k_react/norm);
                 
-                // (unscaled) Upwind one-sided differencing //
+                // A) 4.1 (unscaled) Upwind one-sided differencing for gradient (∇φ) //
                 let ddx = if wx > 0.0 {
                     self.phi[x][y] - self.phi[x-1][y]
                 } else {
@@ -137,7 +137,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
                     self.phi[x][y+1] - self.phi[x][y]
                 };
 
-                // (1.4) (scaled) Application of time derivative //
+                // A) 4.2 (scaled) Application of time derivative //
                 self.tmp[x][y] = self.phi[x][y] - (wx*ddx + wy*ddy)*(self.p.dt/self.p.h);
             }
         }
@@ -145,8 +145,8 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
     }
 
 
-    // ------------- B) 1. Changes in velocity due to acceleration by force -------------
-    /// Addition of Bouyancy and Voriticity Confinement effects to velocity field
+    // ------------------------------- B) Velocity Update via Stam's 4-step loop -------------------------------
+    /// B) 1. Addition of Bouyancy and Vorticity Confinement effects to velocity field
     fn add_forces(&mut self) {
         let force = &mut *self.tmp2;
         let (k_buoy, temp_air) = (self.p.k_buoy, self.p.temp_air);
@@ -187,7 +187,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
     }
 
 
-    // ------------- B) 2. Semi-Lagrangian advection of velocity fields -------------
+    // -------------------------- B) 2. Semi-Lagrangian advection of velocity fields --------------------------
     /// Runge-Kutta 2-stage backtrace, bilinear velocity sampling, clamped at boundaries
     fn semi_lagrangian_advect(&mut self) {
         let (u, phi) = (&*self.u, &*self.phi);
@@ -196,7 +196,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
             for y in 0..NY {
                 let P(x1, y1) = P(x as f32, y as f32);
 
-                // Proceed accordingly if whether implicit surface is crossed //
+                // Proceed accordingly to whether implicit surface is crossed //
                 if self.sample_bilin(phi, (x1, y1)) > 0.0 {  // already in fuel region initially
                     // B) 2.1 backtrace half-step to midpoint //
                     let P(x0, y0) = P(x1, y1) - u[x][y]*(0.5*dt/h);
@@ -231,8 +231,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
     }
 
 
-    // ------------- B) 2. Semi-Lagrangian advection of velocity fields -------------
-    /// Runge-Kutta 2-stage backtrace, bilinear velocity sampling, clamped at boundaries
+    // ---------------------------------- B) 3. Diffusion of velocity fields ----------------------------------
     fn diffuse_velocity(&mut self) {
         let (visc, dt, h) = (self.p.visc, self.p.dt, self.p.h);
         let alpha = h*h/(visc*dt);
@@ -249,7 +248,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
     }
     
     
-    // ----------------- Utility Functions -----------------
+    // ------------------------------------------- Utility Functions -------------------------------------------
     /// Biinear sampling of hot gas 'ghost velocity' within the fuel region
     fn sample_ghost_velocity(&self, p: P<f32>) -> P<f32> {
         let P(x, y) = p;
@@ -273,10 +272,10 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         let P(x0, y0) = P(x, y).floor();
         let P(tx, ty) = P(x, y) - P(x0 as f32, y0 as f32);
 
-        let f00 = f[x0][y0];       let f01 = f[x0][y0+1];
-        let f10 = f[x0+1][y0];       let f11 = f[x0+1][y0+1];  // store x1 in x0
-        let a = f00*(1.0-tx) + f10*tx; let b = f01*(1.0-tx) + f11*tx;  // store tx in x1/y1 in x0/
-        a*(1.0-ty) + b*ty  // store ty in tx in x1/y1 in x0/
+        let f00 = f[x0][y0];           let f01 = f[x0][y0+1];
+        let f10 = f[x0+1][y0];         let f11 = f[x0+1][y0+1];
+        let a = f00*(1.0-tx) + f10*tx; let b = f01*(1.0-tx) + f11*tx;
+        a*(1.0-ty) + b*ty
     }
 
     /// Print a downsampled version of a field to the console
@@ -302,7 +301,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
 }
 
 
-// ---------------- Main ----------------
+// --------------------------------------------------- Main ---------------------------------------------------
 fn main() {
     let mut sim = new_sim::<240, 320>(Params {
         h: 1.0,

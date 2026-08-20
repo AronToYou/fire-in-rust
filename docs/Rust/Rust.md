@@ -171,3 +171,23 @@ impl<T> Screen<T> where T: Draw {
 	}
 }
 ```
+
+### Formatting Traits
+
+| Format                    | Trait                 |
+| ------------------------- | --------------------- |
+| `{rust}print!("{}", v)`   | `{rust}fmt::Display`  |
+| `{rust}print!("{:?}", v)` | `{rust}fmt::Debug`    |
+| `{rust}print!("{:b}", v)` | `{rust}fmt::Binary`   |
+| `{rust}print!("{:x}", v)` | `{rust}fmt::LowerHex` |
+| `{rust}print!("{:X}", v)` | `{rust}fmt::UpperHex` |
+| `{rust}print!("{:o}", v)` | `{rust}fmt::Octal`    |
+| `{rust}print!("{}", v)`   | `{rust}fmt::`         |
+
+| Format                     | Hints                  |
+| -------------------------- | ---------------------- |
+| `{rust}print!("{:#}", v)`  | `{rust}v.alternate()`  |
+| `{rust}print!("{:20}", v)` | `{rust}v.width()`      |
+| `{rust}print!("{:.2}", v)` | `{rust}v.precision()`  |
+| `{rust}print!("{:+}", v)`  | `{rust}v.sign_plus()`  |
+| `{rust}print!("{:-}", v)`  | `{rust}v.sign_minus()` |
