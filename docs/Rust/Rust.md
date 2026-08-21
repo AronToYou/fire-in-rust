@@ -1,6 +1,42 @@
 > [!outline]- Table of Contents
 > - [[Guidelines]] 
 
+# Project Layout
+```
+my-project/
+├── Cargo.toml
+└── src/
+    ├── main.rs
+    ├── lib.rs
+    ├── moda.rs
+    ├── modb/
+	│   ├── mod.rs
+	│   ├── a.rs
+	│   └── b.rs
+    └── bin/
+        ├── tool_a/
+        │   ├── main.rs    <-- Becomes executable 'tool_a'
+        │   └── helper.rs  <-- Module for tool_a
+        └── tool_b.rs      <-- Becomes executable 'tool_b'
+```
+```rust title=main.rs
+using my_project::funca;
+using my_project::modb::funcba;
+
+fn main() {
+	println!("Hello");
+}
+```
+```rust title=lib.rs
+mod moda;
+pub mod modb;
+pub using moda::funca;
+```
+```rust title=modb/mod.rs
+mod a;
+mod b;
+pub using a::funcba;
+```
 # Tips
 ## Comparing Code Directions
 - `{sh}cargo bench`

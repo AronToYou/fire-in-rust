@@ -1,5 +1,5 @@
 [package]
-name = "fire_in_rust"
+name = "fire-in-rust"
 version = "0.1.0"
 edition = "2021"
 
