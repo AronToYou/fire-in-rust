@@ -25,7 +25,7 @@ fn main() {
     sim.print_field(Field::Phi);
     sim.print_field(Field::U);
     
-    let steps = 100;
+    let steps: usize = env::args().nth(1).and_then(|s| s.parse::<usize>().ok()).unwrap_or(100);
     println!("Simulating {steps} steps...");
     for _ in (0..steps).progress() {
         sim.step();
