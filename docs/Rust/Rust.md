@@ -20,10 +20,14 @@ my-project/
         └── tool_b.rs      <-- Becomes executable 'tool_b'
 ```
 ```rust title=main.rs
-using my_project::funca;
-using my_project::modb::funcba;
+using my_project::funca;  // Not idiomatic
+using my_project::modb::funca as funcba;  // not idiomatic
+// using my_project::modb;  // idiomatic
+// modb::funca();  // idiomatic
 
 fn main() {
+	funca();
+	funcba();
 	println!("Hello");
 }
 ```
@@ -35,8 +39,62 @@ pub using moda::funca;
 ```rust title=modb/mod.rs
 mod a;
 mod b;
-pub using a::funcba;
+pub using a::funca;
 ```
+## Reexporting
+```rust title=pkg/lib.rs
+mod a {  // not public!
+	pub mod b {
+		pub fn func() {}
+	}
+}
+pub use crate::a::b;
+```
+```rust title="app.rs"
+use std::io::{self, Write};  // std::io & std::io::Write
+use pkg;
+pkg::b::func();  // valid despite a not public
+```
+
+# Sum Types (Tagged Unions)
+- core concept of functional programming
+## Option
+- Handling Presence
+```rust title=Option
+enum Option<T> {
+    Some(T),  // The box contains a value of type T
+    None,     // The box is empty
+}
+```
+```rust title=Handling
+match env::args().nth(1) {
+    Some(arg) => println!("User typed: {}", arg),
+    None => println!("No argument provided! Using defaults."),
+}
+```
+- `.ok()` converts `Result::Ok(value)` or `Result::Error(err)` 
+	- into `Some(value)`or `None`
+- `.map`
+- `.and_then`
+- `.unwrap_or`
+## Result
+- Handling Failure
+```rust title=Result
+enum Result<T, E> {
+    Ok(T),  // The operation succeeded; here is the value (T)
+    Err(E), // The operation failed; here is the error details (E)
+}
+```
+```rust title="? operator"
+fn read_username() -> Result<String, io::Error> {
+    // If File::open fails, the error is immediately returned from the whole function
+    let mut file = File::open("username.txt")?; 
+    let mut username = String::new();
+    file.read_to_string(&mut username)?;
+    Ok(username)
+}
+```
+
 # Tips
 ## Comparing Code Directions
 - `{sh}cargo bench`

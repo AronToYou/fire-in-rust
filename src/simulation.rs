@@ -3,7 +3,7 @@ const MIN_NORM: f32 = 1e-8;
 
 
 // --------------------------------------------- Utility Functions ---------------------------------------------
-pub fn new_sim<const NX: usize, const NY: usize>(p: Params) -> Sim<NX, NY, impl Fn((f32, f32)) -> (f32, f32)> {
+pub fn new_sim<const NX: usize, const NY: usize>(p: Params) -> Sim<NX, NY, impl Fn((f32, f32)) -> (f32, f32) + Clone> {
     let maxx = (NX as f32) - 1.001;
     let maxy = (NY as f32) - 1.001;
     let clamp_xy = move |(x, y): (f32, f32)| (x.clamp(0.0, maxx), y.clamp(0.0, maxy));
@@ -36,7 +36,8 @@ pub struct Params {
 
 
 // --------------------------------------------- Simulation State ---------------------------------------------
-pub struct Sim<const NX: usize, const NY: usize, C> where C: Fn((f32, f32)) -> (f32, f32) {
+#[derive(Clone)]
+pub struct Sim<const NX: usize, const NY: usize, C> where C: Fn((f32, f32)) -> (f32, f32) + Clone {
     p: Params,  // Simulation parameters (defined above)
     clamp_xy: C,  // clamping function for coordinates
 
@@ -59,7 +60,7 @@ pub enum Field {
     Phi, Temp, Rt, Dns
 }
 
-impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32)) -> (f32, f32) {
+impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32)) -> (f32, f32) + Clone {
     fn new(p: Params, clamp_xy: C) -> Self {
         let mut s = Self {
             p, clamp_xy,
