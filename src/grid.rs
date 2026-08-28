@@ -76,7 +76,8 @@ impl<T> Mul for P<T> where T: Add<Output = T> + Mul<Output = T> + Copy {
 impl fmt::Display for P<f32> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let p = f.precision().unwrap_or(2);
-        write!(f, "({:.p$},{:.p$})", self.0, self.1, p = p)
+        write!(f, "({:.p$},{:.p$})", self.0, self.1, p = p)?;
+        Ok(())
     }
 }
 
