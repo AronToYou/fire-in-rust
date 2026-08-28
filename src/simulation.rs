@@ -108,15 +108,19 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
 
     /// Perform single full simulation step 
     pub fn step(&mut self) {
-        // (1) Update level set field //
+        // A) Update level set field //
         self.update_levelset();
 
-        // (2) Add Forces {Bouyancy, vorticity confinement} //
-        self.add_forces();
+        // B) Intermediate Velocity calculated //
+        self.add_forces();                    // 1. Add Forces {Bouyancy, vorticity confinement}
+        self.apply_boundary_conditions();    //
+        self.semi_lagrangian_advect();      // 2. Semi-Lagrangian advection of velocity fields
         self.apply_boundary_conditions();
 
-        // (3) Semi-Lagrangian advection of velocity fields //
-        self.semi_lagrangian_advect();
+        // C) Apply Pressure Gradient //
+        self.compute_divergence();         // 1. Compute divergence of intermediate velocity field
+        self.solve_for_pressure();        // 2. Jacobi iteration to solve Poisson equation for pressure field
+        self.apply_pressure_gradient();  // 3. Apply gradient of pressure field to velocity field
         self.apply_boundary_conditions();
     }
 
@@ -272,6 +276,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         }
 
         //// Handle boundary conditions for divergence at edges of the grid
+        // Corners always remain zero
         // y boundaries (top and bottom)
         for x in 1..NX-1 {
             for y in [0, NY-1] {
@@ -288,13 +293,67 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         }
     }
 
-        for _ in 0..20 {  // Gauss-Seidel iterations
+    // C) 2. Jacobi iteration to solve Poisson equation for pressure field (∇²p/ρ = (∇·u)/Δt)
+    /// Solves velocity diffusion using the Jacobi method on a 2D grid.
+    pub fn solve_for_pressure(&mut self) {
+        let (div_u, p, p_next) = (&*self.div_u, &mut *self.p, &mut *self.tmp);
+        
+        let max_iter = 5000;  // maximum number of Jacobi iterations
+        let tolerance = 1e-6;  // convergence tolerance for residual error
+        // Main Iterative Loop
+        for _iter in 0..max_iter {
+            let mut max_residual = 0.0f32;
+
+            // Iterate strictly over interior nodes to preserve boundary conditions
             for x in 1..NX-1 {
                 for y in 1..NY-1 {
-                    self.tmp2[x][y] = (self.u[x+1][y] + self.u[x-1][y] + self.u[x][y+1] + self.u[x][y-1] + self.u[x][y]*alpha)*r_beta;
+
+                    // Jacobi Update Formula: p = 0.25 * (Sum(Neighbors) - h^2)
+                    p_next[x][y] = 0.25*(p[x+1][y] + p[x-1][y] + p[x][y+1] + p[x][y-1]) - div_u[x][y];
+
+                    // Calculate the local residual error to track convergence
+                    let residual = (p_next[x][y] - p[x][y]).abs();
+                    if residual > max_residual {
+                        max_residual = residual;
+                    }
                 }
             }
-            std::mem::swap(&mut *self.u, &mut *self.tmp2);
+
+            // Handle boundaries separately to maintain Neumann boundary conditions (∂p/∂n=0)
+            for x in 1..NX-1 {
+                p_next[x][0] = 0.25*(p[x+1][0] + p[x-1][0]) - div_u[x][0];
+                p_next[x][NY-1] = 0.25*(p[x+1][NY-1] + p[x-1][NY-1]) - div_u[x][NY-1];
+            }
+            for y in 1..NY-1 {
+                p_next[0][y] = 0.25*(p[0][y+1] + p[0][y-1]) - div_u[0][y];
+                p_next[NX-1][y] = 0.25*(p[NX-1][y+1] + p[NX-1][y-1]) - div_u[NX-1][y];
+            }
+            // Handle corners separately to approximate Neumann boundary conditions
+            p_next[0][0] =       (p[1][0] +       p[0][1])/2.0;
+            p_next[0][NY-1] =    (p[1][NY-1] +    p[0][NY-2])/2.0;
+            p_next[NX-1][0] =    (p[NX-2][0] +    p[NX-1][1])/2.0;
+            p_next[NX-1][NY-1] = (p[NX-2][NY-1] + p[NX-1][NY-2])/2.0;
+
+            // Efficiently swap memory pointers without reallocating arrays
+            std::mem::swap(p, p_next);
+
+            // Check for early convergence termination
+            if max_residual < tolerance {
+                break;
+            }
+        }
+    }
+
+    // C) 3. Apply gradient of pressure field to velocity field (u = u* - Δt∇p/ρ)
+    pub fn apply_pressure_gradient(&mut self) {
+        let (u, p) = (&mut *self.u, &*self.p);
+        let (dt, h, d_fuel, d_hgas) = (self.param.dt, self.param.h, self.param.d_fuel, self.param.d_hgas);
+        for x in 1..NX-1 {
+            for y in 1..NY-1 {
+                let rho = if self.phi[x][y] > 0.0 { d_fuel } else { d_hgas };
+                u[x][y].0 -= dt*(p[x+1][y] - p[x-1][y])/(2.0*h*rho);
+                u[x][y].1 -= dt*(p[x][y+1] - p[x][y-1])/(2.0*h*rho);
+            }
         }
     }
     

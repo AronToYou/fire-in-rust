@@ -91,7 +91,7 @@ $$D = V_f - S$$
 > $$\vec{\text{w}}_4 = \vec{\text{w}}_3 - \nabla q$$
 ## C) Apply Pressure Gradient
 $$\vec{u} = \vec{u}^* - \frac{\Delta t}{\rho}\nabla p$$
-Noting conservation of mass $\nabla\cdot\vec{u} = 0$
+Choose $p$ which agrees with conservation of mass $\nabla\cdot\vec{u} = 0$
 $$\nabla^2 p= \frac{\rho}{\Delta t}(\nabla\cdot\vec{u}^*)$$
 1. Calculate (scaled) divergence of intermediate velocity field via central differencing
 $$\frac{\rho h^2}{4\Delta t}(\nabla\cdot\vec{u}^*) = \frac{\rho h}{8\Delta t}\Big[(u^{*(x)}_{i+1,j} - u^{*(x)}_{i-1,j}) + (u^{*(y)}_{i,j+1} - u^{*(y)}_{i,j-1})\Big]$$
