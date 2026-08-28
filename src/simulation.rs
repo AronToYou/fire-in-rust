@@ -84,9 +84,9 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         for x in 0..NX {
             for y in 0..NY {
                 if y < 10 {
-                    self.u[x][y] = P(0.0, 1.5);
                     self.phi[x][y] = 5.0;
-                    self.temp_gas[x][y] = self.p.temp_air + 10.0;
+                    self.temp_gas[x][y] = self.param.temp_air + 10.0;
+                    self.u[x][y] = if y == 0 { P(0.0, 1.5) } else { P(0.0, 0.0) };
                 } else {
                     self.phi[x][y] = -5.0;
                 }
