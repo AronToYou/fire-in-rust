@@ -13,7 +13,7 @@ fn bench_step(c: &mut Criterion) {
 		temp_max: 2200.0,
 		k_cool: 0.002,
 		vconf: 2.0,
-		k_react: 0.7,
+		s: 0.7,
 		d_fuel: 1.0,
 		d_hgas: 0.1,
 

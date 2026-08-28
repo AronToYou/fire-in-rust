@@ -1,11 +1,18 @@
 # Outline
 Incompressible Navier-Stokes
 $$\pdv{\vec{u}}{t} = -(\vec{u}\cdot\nabla)\vec{u} - \frac{1}{\rho}\nabla p + \nu\nabla^2\vec{u} + \vec{f}$$
+$$\nabla\cdot\vec{u} = 0$$
 Velocity updated for incompressible flow (Stam's 4-step loop)
 1. add force
 2. advect
-3. diffuse
-4. project
+3. ~~diffuse~~
+4. ~~project~~
+We actually ignore the drag/viscosity term at this stage of the project.
+
+After using the first 2 steps to solve for an intermediate velocity
+$$\vec{u} = \vec{u}^* - \frac{\Delta t}{\rho}\nabla p$$
+Applying the gradient operator to both sides and utilizing the 2nd equation (conservation of mass)
+$$\nabla\cdot\vec{u}^* = \frac{\Delta t}{\rho}\nabla^2 p$$
 ## Stable Fluids
 ## A) **Thin flame** tracked by **level set** $\phi$[^1]
 1. Implicit surface where ($\phi=0$) defines the interface between
@@ -22,12 +29,15 @@ $$\dot{\phi} = -(\vec{u}_f + S\vec{n})\cdot\nabla\phi$$
 $$\phi_{t+1} = \phi_t -(\vec{u}_f + S\vec{n})\cdot\nabla\phi_t\frac{\Delta t}{h}$$
 
 - evolve **fuel** and **hot gas** velocity fields separately
-## B) Velocity updated via Stam's 4-step loop[^3]
+## B) Intermediate Velocity calculated[^3]
+First 2 steps of Stam's 4-step loop are used to 
+- apply the effects of forces
+- advect the velocity field
 $$\vec{\text{w}}_0(\vec{x}) := \vec{u}(\vec{x},\; t)$$
 $$\vec{\text{w}}_0 = \vec{u}_t$$
 $$\vec{\text{w}}_0\rightarrow\text{add force}\rightarrow\vec{\text{w}}_1\rightarrow\text{advect}\rightarrow\vec{\text{w}}_2\rightarrow\text{diffuse}\rightarrow\vec{\text{w}}_3\rightarrow\text{project}\rightarrow\vec{\text{w}}_4$$
 $$\vec{u}(\vec{x},\; t+\Delta t) = \vec{\text{w}}_4(\vec{x})$$
- 1. **Add Force** (before advection)[^2]
+1. **Add Force** (before advection)[^2]
 	 1. Buoyancy
 $$f_{buoy} = \alpha(T - T_{air})\hat{z}$$
 	2. Vorticity Confinement
@@ -37,7 +47,7 @@ $$\vec{\omega} = \nabla\times\vec{u}$$
 $$\vec{N} = \nabla|\vec{\omega}|/|\nabla|\vec{\omega}||$$
 		3. Force of vorticity confinement
  $$f_{conf} = \varepsilon h(\vec{N}\times\vec{\omega})$$
-	 3. Add Force
+	3. Add Force
 $$\vec{\text{w}}_1 = \vec{u}_t + \triangle t\ \vec{f}$$
 2. **Advection**[^3]
 - Stable Semi-Lagrangian
@@ -52,23 +62,49 @@ $$P_{-1} = P_0 - \vec{\text{w}}_1(P_{-1/2})\frac{\Delta t}{h}$$
 	4. sample velocity*
 $$\vec{\text{w}}_2(P_0) \approx \vec{\text{w}}_1(P_{-1}) \approx \text{bilinear\_sample}(\vec{\text{w}}_1,\; P_{-1})$$
 #### **\*Expansion coupling** across front via **ghost normal velocity** 
+i.e. when **hot gas** advection samples **fuel**, synthesize correct cross-interface value
 - (mass conservation) $\nabla\cdot\vec{u}=0$
-- i.e. when **hot gas** advection samples **fuel**, synthesize correct cross-interface value
+$$\rho_h(V_h - D) = \rho_f(V_f - D)$$
+$$D = V_f - S$$
+- Where $V$  and $D$ is the speed of the gas and and interface, both normal to the interface.
+- $S$ is the speed of the reaction of fuel into gas.
+
 	- $V_h^{ghost} = V_f + (\rho_f/\rho_h - 1)S$
-		- (normal velocity of fuel) $V_f = \vec{u}_f\cdot\vec{n}$
+		- $V_f = \vec{u}_f\cdot\vec{n}$ (normal velocity of fuel)
 	- $\vec{u}_h^{ghost} = V_h^{ghost}\vec{n} + \vec{u}_f - (\vec{u}_f\cdot\vec{n})\vec{n}$
-	- $\vec{u}_h^{ghost} = (\rho_f/\rho_h - 1)S + \vec{u}_f$
-3. **Diffusion**
-- with implicit diffusion
-	- `diffuse_velocity`
-$$\pdv{\vec{\text{w}}_2}{t} = \nu\nabla^2\vec{\text{w}}_2$$
-$$\vec{\text{w}}_3 = \vec{\text{w}}_2 + (\nu\Delta t)\nabla^2\vec{\text{w}}_2$$
-4. **Projection**
-- Onto divergent free fields
-- and a Poisson solve for pressure
-	- `project_hot`
-$$\nabla^2q = \nabla\cdot\vec{\text{w}}_3$$
-$$\vec{\text{w}}_4 = \vec{\text{w}}_3 - \nabla q$$
+	- $\vec{u}_h^{ghost} = (\rho_f/\rho_h - 1)S\vec{n} + \vec{u}_f$
+
+
+> [!NOTE]- Last 2 unused steps of Stam's 4-step loop
+> 3. **Diffusion**
+> - with implicit diffusion
+> 	- `diffuse_velocity`
+> $$\pdv{\vec{\text{w}}_2}{t} = \nu\nabla^2\vec{\text{w}}_2$$
+> $$\vec{\text{w}}_3 = \vec{\text{w}}_2 + (\nu\Delta t)\nabla^2\vec{\text{w}}_2$$
+> Or solve implicit equation
+> $$(\mathbf{I} - \nu\Delta t\nabla^2)\vec{\text{w}}_3 = \vec{\text{w}}_2$$
+> 3. **Projection**
+> - Onto divergent free fields
+> - and a Poisson solve for pressure
+> 	- `project_hot`
+> $$\nabla^2q = \nabla\cdot\vec{\text{w}}_3$$
+> $$\vec{\text{w}}_4 = \vec{\text{w}}_3 - \nabla q$$
+## C) Apply Pressure Gradient
+$$\vec{u} = \vec{u}^* - \frac{\Delta t}{\rho}\nabla p$$
+Noting conservation of mass $\nabla\cdot\vec{u} = 0$
+$$\nabla^2 p= \frac{\rho}{\Delta t}(\nabla\cdot\vec{u}^*)$$
+1. Calculate (scaled) divergence of intermediate velocity field via central differencing
+$$\frac{\rho h^2}{4\Delta t}(\nabla\cdot\vec{u}^*) = \frac{\rho h}{8\Delta t}\Big[(u^{*(x)}_{i+1,j} - u^{*(x)}_{i-1,j}) + (u^{*(y)}_{i,j+1} - u^{*(y)}_{i,j-1})\Big]$$
+- plus/minus a correction term $\times N$, where $N$ counts how many of $p_{i\pm1,j}$ $p_{i,j\pm1}$ in step 2 cross the fuel/hot-gas interface, and the sign depends on cross-direction
+$$\frac{\rho h}{8\Delta t}\Big[(u^{*(x)}_{i+1,j} - u^{*(x)}_{i-1,j}) + (u^{*(y)}_{i,j+1} - u^{*(y)}_{i,j-1})\Big] \pm \Delta t(\rho_fS)^2\big(\frac{1}{\rho_f} - \frac{1}{\rho_h}\big)N$$
+2. Solve Poisson equation for Pressure
+	- Currently simple Jacobi solver used, with iteration step
+$$p^{k+1}_{ij} = \frac{1}{4}(p^k_{i+1,j} + p^k_{i-1,j} + p^k_{i,j+1} + p^k_{i,j-1} - \frac{\rho h^2}{\Delta t}(\nabla\cdot\vec{u}^*))$$
+3. Calculate and apply gradient of pressure field
+### Jump Condition for Pressure
+From conservation of momentum
+$$\rho_h(V_h - D)^2 + p_h = \rho_f(V_f - D)^2 + p_f$$
+$$p_h = p_f - \Delta t(\rho_f S)^2\big(\frac{1}{\rho_h} - \frac{1}{\rho_f}\big)$$
 ## **Reaction-time scalar Y** (advected + linear source)
 - (advected and decreased by 1 per unit time)
 - time since crossing blue core

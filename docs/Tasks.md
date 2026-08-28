@@ -3,8 +3,12 @@
 - [x] P convertible between `usize` & `f32` ✅ 2025-09-15
 - [x] Rust Obsidian Vault within repo ✅ 2026-01-03
 	- [x] README linked to main page in book ✅ 2026-01-03
-- [ ] Write down equations for ghost
+- [x] Write down equations for ghost ✅ 2026-08-22
 - [ ] print rows
+- [ ] Update README to match Extended README
+- [ ] write benchmarks
+- [ ] write unit tests
+- [ ] determine why NaN values occur
 
 ## Directions
 - Field trait
