@@ -94,6 +94,18 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         }
     }
 
+    /// Apply boundary conditions to velocity field
+    pub fn apply_boundary_conditions(&mut self) {
+        for x in 0..NX {
+            self.u[x][0].1 = 1.5;
+            self.u[x][NY-1].1 = 0.0;
+        }
+        for y in 0..NY {
+            self.u[0][y].0 = 0.0;
+            self.u[NX-1][y].0 = 0.0;
+        }
+    }
+
     /// Perform single full simulation step 
     pub fn step(&mut self) {
         // (1) Update level set field //
@@ -101,9 +113,11 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
 
         // (2) Add Forces {Bouyancy, vorticity confinement} //
         self.add_forces();
+        self.apply_boundary_conditions();
 
         // (3) Semi-Lagrangian advection of velocity fields //
         self.semi_lagrangian_advect();
+        self.apply_boundary_conditions();
     }
 
 
