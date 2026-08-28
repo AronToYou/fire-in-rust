@@ -243,11 +243,50 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
     }
 
 
-    // ---------------------------------- B) 3. Diffusion of velocity fields ----------------------------------
-    fn diffuse_velocity(&mut self) {
-        let (visc, dt, h) = (self.p.visc, self.p.dt, self.p.h);
-        let alpha = h*h/(visc*dt);
-        let r_beta = 1.0/(4.0 + alpha);
+    // ---------------------------------- C) Apply Pressure Gradient ----------------------------------
+    // C) 1. Compute (scaled) divergence of intermediate velocity field (∇·u)(h/8hΔt)
+    fn compute_divergence(&mut self) {
+        let (u, phi, div_u) = (&*self.u, &*self.phi, &mut *self.div_u);
+        let (d_fuel, d_hgas) = (self.param.d_fuel, self.param.d_hgas);
+        let scale = 0.125*self.param.h / (self.param.dt);  // (1/4)(h²/4Δt)/(2h)
+
+        let m = d_fuel*self.param.s;  // Mass flux
+        let corr = self.param.dt*m*m*(1.0/d_hgas - 1.0/d_fuel);  // Correction term for pressure when sampling across the implicit surface
+        for x in 1..NX-1 {
+            for y in 1..NY-1 {
+                // Calculate negative(positive) correction term when sampling hot-gas(fuel) region from fuel(hot-gas) region
+                // @NOTE the sign is backwards since the divergence is subtracted from p
+                let (d, count) = if phi[x][y] > 0.0 {
+                    (d_fuel,
+                    ((phi[x+1][y] < 0.0) as i32) + ((phi[x-1][y] < 0.0) as i32) + ((phi[x][y+1] < 0.0) as i32) + ((phi[x][y-1] < 0.0) as i32))
+                } else {
+                    (d_hgas,
+                    -((phi[x+1][y] > 0.0) as i32) - ((phi[x-1][y] > 0.0) as i32) - ((phi[x][y+1] > 0.0) as i32) - ((phi[x][y-1] > 0.0) as i32))
+                };
+
+                // Calculate divergence using central differencing
+                let du_dx = u[x+1][y].0 - u[x-1][y].0;
+                let dv_dy = u[x][y+1].1 - u[x][y-1].1;
+                div_u[x][y] = d * (du_dx + dv_dy) * scale + corr*(count as f32);
+            }
+        }
+
+        //// Handle boundary conditions for divergence at edges of the grid
+        // y boundaries (top and bottom)
+        for x in 1..NX-1 {
+            for y in [0, NY-1] {
+                let d = if phi[x][y] > 0.0 { d_fuel } else { d_hgas };
+                div_u[x][y] = d * (u[x+1][y].0 - u[x-1][y].0) * scale;
+            }
+        }
+        // x boundaries (left and right)
+        for x in [0, NX-1] {
+            for y in 1..NY-1 {
+                let d = if phi[x][y] > 0.0 { d_fuel } else { d_hgas };
+                div_u[x][y] = d * (u[x][y+1].1 - u[x][y-1].1) * scale;
+            }
+        }
+    }
 
         for _ in 0..20 {  // Gauss-Seidel iterations
             for x in 1..NX-1 {
