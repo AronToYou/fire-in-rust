@@ -1,6 +1,7 @@
 #[cfg(debug_assertions)]
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::grid::{P, GridDisp, Linterp, IsNan};
+use rayon::prelude::*;
 const MIN_NORM: f32 = 1e-8;
 
 
@@ -419,16 +420,18 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         if cfg!(debug_assertions) {
             let start = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
             let fields = [&*self.p, &*self.div_u, &*self.phi];
-            for (i, field) in fields.iter().enumerate() {
-                for x in 0..NX {
-                    for y in 0..NY {
-                        field[x][y].is_nan().then(|| panic!("NaN detected {} in field {} at ({}, {})", stage, i, x, y));
-                        if i == 0 && self.u[x][y].is_nan() {
-                            panic!("NaN detected {} in velocity field at ({}, {})", stage, x, y);
-                        }
-                    }
-                }
-            }
+            let u = &*self.u;
+            rayon::join(|| {
+                fields.par_iter().enumerate().for_each(|(i, field)| {
+                    field.iter().for_each(|row| {
+                            row.iter().any(|val| val.is_nan()).then(|| panic!("NaN detected in field {}", i));
+                    });
+                });
+            }, || {
+                u.par_iter().for_each(|row| {
+                    row.iter().any(|val| val.is_nan()).then(|| panic!("NaN detected in velocity field"));
+                });
+            });
             let end = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
             self.ms_counter += end - start;
             println!("NaN check completed in {} ms", self.ms_counter);
