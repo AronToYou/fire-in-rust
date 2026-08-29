@@ -200,6 +200,12 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
                 self.u[x][y] += force[x][y]*dt;
             }
         }
+        // Don't forget to add bouyancy force to the left/right boundaries (skip top/bottom due to BCs) //
+        for x in [0, NX-1] {
+            for y in 1..NY-1 {
+                self.u[x][y] += force[x][y]*dt;
+            }
+        }
     }
 
 
