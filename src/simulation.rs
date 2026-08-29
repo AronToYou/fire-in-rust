@@ -1,4 +1,6 @@
-use crate::grid::{P, GridDisp, Linterp};
+#[cfg(debug_assertions)]
+use std::time::{SystemTime, UNIX_EPOCH};
+use crate::grid::{P, GridDisp, Linterp, IsNan};
 const MIN_NORM: f32 = 1e-8;
 
 
@@ -50,7 +52,10 @@ pub struct Sim<const NX: usize, const NY: usize, C> where C: Fn((f32, f32)) -> (
     rt: Box<[[f32; NY]; NX]>,       // reaction-time tracker (1 at fuel; decreases after crossing)
     dns: Box<[[f32; NY]; NX]>,     // smoke density (simple)
 
-    tmp: Box<[[f32; NY]; NX]>, tmp2: Box<[[P<f32>; NY]; NX]>  // temporary intermediate fields for calculations
+    tmp: Box<[[f32; NY]; NX]>, tmp2: Box<[[P<f32>; NY]; NX]>,  // temporary intermediate fields for calculations
+    
+    #[cfg(debug_assertions)]
+    ms_counter: u128  // time counter for NaN checking [ms]
 }
 
 /// Which field from `Sim` to print
@@ -73,7 +78,10 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
             rt: Box::new([[0.0; NY]; NX]),
             dns: Box::new([[0.0; NY]; NX]),
 
-            tmp: Box::new([[0.0; NY]; NX]), tmp2: Box::new([[P(0.0, 0.0); NY]; NX])
+            tmp: Box::new([[0.0; NY]; NX]), tmp2: Box::new([[P(0.0, 0.0); NY]; NX]),
+
+            #[cfg(debug_assertions)]
+            ms_counter: 0
         };
         s.init_fuel_inlet();
         s
@@ -110,17 +118,22 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
     pub fn step(&mut self) {
         // A) Update level set field //
         self.update_levelset();
+        self.check_for_nans("after updating level set");
 
         // B) Intermediate Velocity calculated //
         self.add_forces();                    // 1. Add Forces {Bouyancy, vorticity confinement}
+        self.check_for_nans("after adding forces");
         self.apply_boundary_conditions();    //
         self.semi_lagrangian_advect();      // 2. Semi-Lagrangian advection of velocity fields
+        self.check_for_nans("after semi-lagrangian advection");
         self.apply_boundary_conditions();
 
         // C) Apply Pressure Gradient //
         self.compute_divergence();         // 1. Compute divergence of intermediate velocity field
         self.solve_for_pressure();        // 2. Jacobi iteration to solve Poisson equation for pressure field
+        self.check_for_nans("after solving for pressure");
         self.apply_pressure_gradient();  // 3. Apply gradient of pressure field to velocity field
+        self.check_for_nans("after applying pressure gradient");
         self.apply_boundary_conditions();
     }
 
@@ -137,6 +150,9 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
                 let gx = phi[x+1][y] - phi[x-1][y];  // gradient x-component
                 let gy = phi[x][y+1] - phi[x][y-1];  // gradient y-component
                 let norm = (gx*gx + gy*gy).sqrt().max(MIN_NORM);  // gradient norm
+                if norm.is_nan() {
+                    panic!("NaN detected in level set gradient norm at ({}, {})", x, y);
+                }
                 
                 // A) 3. Velocity of implicit surface (where φ==0) //
                 let P(wx, wy) = u[x][y] + P(gx, gy)*(s/norm);
@@ -382,7 +398,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
     }
 
     /// Bilinear sampling of scalar field, clamped at boundaries
-    fn sample_bilin<T: Linterp>(&self, f: &[[T; NY]; NX], p: (f32, f32)) -> T {
+    fn sample_bilin<T: Linterp + IsNan + std::fmt::Display>(&self, f: &[[T; NY]; NX], p: (f32, f32)) -> T {
         let (x, y) = (self.clamp_xy)(p);
         let P(x0, y0) = P(x, y).floor();
         let P(tx, ty) = P(x, y) - P(x0 as f32, y0 as f32);
@@ -390,7 +406,33 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         let f00 = f[x0][y0];           let f01 = f[x0][y0+1];
         let f10 = f[x0+1][y0];         let f11 = f[x0+1][y0+1];
         let a = f00*(1.0-tx) + f10*tx; let b = f01*(1.0-tx) + f11*tx;
-        a*(1.0-ty) + b*ty
+        let samp = a*(1.0-ty) + b*ty;
+        if cfg!(debug_assertions) && samp.is_nan() {
+            panic!("NaN detected in bilin p:({},{}) clamp(p):({},{}) p0:({},{}) t:({},{}) f:[{},{},{},{}] a:{} b:{} samp:{}", 
+                    p.0, p.1, x, y, x0, y0, tx, ty, f00, f01, f10, f11, a, b, samp);
+        }
+        samp
+    }
+
+    /// Check all fields for NaN values and panic if any are found
+    pub fn check_for_nans(&mut self, stage: &str) {
+        if cfg!(debug_assertions) {
+            let start = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+            let fields = [&*self.p, &*self.div_u, &*self.phi];
+            for (i, field) in fields.iter().enumerate() {
+                for x in 0..NX {
+                    for y in 0..NY {
+                        field[x][y].is_nan().then(|| panic!("NaN detected {} in field {} at ({}, {})", stage, i, x, y));
+                        if i == 0 && self.u[x][y].is_nan() {
+                            panic!("NaN detected {} in velocity field at ({}, {})", stage, x, y);
+                        }
+                    }
+                }
+            }
+            let end = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+            self.ms_counter += end - start;
+            println!("NaN check completed in {} ms", self.ms_counter);
+        }
     }
 
     /// Print a downsampled version of a field to the console

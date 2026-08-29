@@ -214,7 +214,13 @@ let index: usize = index
 let element = a[index];
 
 ```
-
+### Iterators
+- `.iter()` - borrow immutably
+- `.iter_mut()` - borrow mutably
+- `.into_iter()` - take ownership
+	- default for `for i in some_vec {`
+- `.map()` - lazy iterator, returns result
+- `.for_each()` - eager, does not return
 ### References
 ```rust
 fn main() {

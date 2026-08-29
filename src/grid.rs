@@ -16,9 +16,25 @@ impl<T, const NX: usize, const NY: usize> GridDisp for [[T; NY]; NX] where T: fm
 pub trait Linterp: Add<Output = Self> + Mul<f32, Output = Self> + Copy {}
 impl<T> Linterp for T where T: Add<Output = Self> + Mul<f32, Output = Self> + Copy {}
 
+pub trait IsNan {
+    fn is_nan(&self) -> bool;
+}
+
+impl IsNan for f32 {
+    fn is_nan(&self) -> bool {
+        f32::is_nan(*self)
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct P<T>(pub T, pub T);
+
+impl IsNan for P<f32> {
+    fn is_nan(&self) -> bool {
+        self.0.is_nan() || self.1.is_nan()
+    }
+}
 
 impl<T> Add for P<T> where T: Add<Output = T> + Copy {
     type Output = Self;

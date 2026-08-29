@@ -8,7 +8,12 @@
 - [ ] Update README to match Extended README
 - [ ] write benchmarks
 - [ ] write unit tests
-- [ ] determine why NaN values occur
+- [ ] determine why `NaN` values occur
+	- [ ] parallelize the `NaN` check
+- [ ] [documentation](https://doc.rust-lang.org/rust-by-example/meta/doc.html)
+- [ ] [enums](https://stackoverflow.com/questions/28028854/how-do-i-match-enum-values-with-an-integer)
+- [ ] switch to face centered velocity fields
+	- [ ] fix boundary conditions
 
 ## Directions
 - Field trait
