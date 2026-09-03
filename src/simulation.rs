@@ -146,7 +146,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         self.tmp.copy_from_slice(phi);  // @TODO
         for x in 1..NX-1 {
             for y in 1..NY-1 {
-                // A) 2. (unscaled) Central differencing for normed gradient (∇φ/|∇φ|) //
+                // A) 1. (unscaled) Central differencing for normed gradient (∇φ/|∇φ|) //
                 let gx = phi[x+1][y] - phi[x-1][y];  // gradient x-component
                 let gy = phi[x][y+1] - phi[x][y-1];  // gradient y-component
                 let norm = (gx*gx + gy*gy).sqrt().max(MIN_NORM);  // gradient norm
@@ -154,10 +154,10 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
                     panic!("NaN detected in level set gradient norm at ({}, {})", x, y);
                 }
                 
-                // A) 3. Velocity of implicit surface (where φ==0) //
+                // A) 2. Velocity of implicit surface (where φ==0) //
                 let P(wx, wy) = u[x][y] + P(gx, gy)*(s/norm);
                 
-                // A) 4.1 (unscaled) Upwind one-sided differencing for gradient (∇φ) //
+                // A) 3.1 (unscaled) Upwind one-sided differencing for gradient (∇φ) //
                 let ddx = if wx > 0.0 {
                     phi[x][y] - phi[x-1][y]
                 } else {
@@ -169,13 +169,12 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
                     phi[x][y+1] - phi[x][y]
                 };
 
-                // A) 4.2 (scaled) Application of time derivative //
+                // A) 3.2 (scaled) Application of time derivative //
                 self.tmp[x][y] = phi[x][y] - (wx*ddx + wy*ddy)*(dt/h);
             }
         }
         std::mem::swap(&mut *self.phi, &mut *self.tmp);
     }
-
 
     // ------------------------------- B) Velocity Update via Stam's 4-step loop -------------------------------
     /// B) 1. Addition of Bouyancy and Vorticity Confinement effects to velocity field
@@ -224,7 +223,6 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         }
     }
 
-
     // -------------------------- B) 2. Semi-Lagrangian advection of velocity fields --------------------------
     /// Runge-Kutta 2-stage backtrace, bilinear velocity sampling, clamped at boundaries
     fn semi_lagrangian_advect(&mut self) {
@@ -267,7 +265,6 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         }
         std::mem::swap(&mut *self.u, &mut *self.tmp2);
     }
-
 
     // ---------------------------------- C) Apply Pressure Gradient ----------------------------------
     // C) 1. Compute (scaled) divergence of intermediate velocity field (∇·u)(h/8hΔt)

@@ -1,28 +1,58 @@
 # Outline
-Incompressible Navier-Stokes
+## Incompressible Navier-Stokes
 $$\pdv{\vec{u}}{t} = -(\vec{u}\cdot\nabla)\vec{u} - \frac{1}{\rho}\nabla p + \nu\nabla^2\vec{u} + \vec{f}$$
+$$\nabla\cdot\vec{u} = 0$$
 Velocity updated for incompressible flow (Stam's 4-step loop)
 1. add force
 2. advect
-3. diffuse
-4. project
-## Stable Fluids
+3. ~~diffuse~~
+4. ~~project~~
+We actually ignore the drag/viscosity term at this stage of the project.
+
+After using the first 2 steps to solve for an intermediate velocity
+$$\vec{u} = \vec{u}^* - \frac{\Delta t}{\rho}\nabla p$$
+Applying the gradient operator to both sides and utilizing the 2nd equation (conservation of mass)
+$$\nabla\cdot\vec{u}^* = \frac{\Delta t}{\rho}\nabla^2 p$$
+## Thin Flame reaction front tracked by Level-Set
+The reaction front, or the boundary between the unreacted fuel and the post-combustion hot gas is defined to be the zero level of a level set function which depends on space and time.
+$$\phi(\vec{x},t) = 0$$
+If we say $\vec{x}(t)$ is the position of some particle somewhere on this reaction front such that
+$$\phi(\vec{x}(t),t) = 0$$
+then by the chain rule
+$$\dot{\phi} + \nabla\phi(\vec{x}(t),t)\cdot\vec{x}'(t) = 0$$
+or rearranged with $\vec{x}'(t) = \vec{u}_{fuel}$ referring to the velocity field of the fuel particles
+$$\dot{\phi} + \vec{u}_{fuel}(\vec{x},t)\cdot\nabla\phi(\vec{x},t) = 0$$
+Since the front also moves due to the reaction of fuel into hot combusted gas itself, we need to include an additional term
+$$\dot{\phi} + (\vec{u}_{fuel} + \vec{n}S)\cdot\nabla\phi = 0$$
+where $S$ is the reaction speed and $\vec{n}=\nabla\phi/|\nabla\phi|$ is the normal vector to the reaction front.
+# Implemented Procedure
 ## A) **Thin flame** tracked by **level set** $\phi$[^1]
-1. Implicit surface where ($\phi=0$) defines the interface between
-	- **Fuel** ($\phi>0$) blue-core reaction zone
-	- **Hot Gas** ($\phi<0$)
-2. Implicit surface unit normal vector (central differencing)
+Implicit surface where ($\phi=0$) defines the interface between
+- **Fuel** ($\phi>0$) blue-core reaction zone
+- **Hot Gas** ($\phi<0$)
+Propagation through time is calculated using the equation
+$$\dot{\phi} + (\vec{u}_{fuel} + \vec{n}S)\cdot\nabla\phi = 0$$
+
+1. Implicit surface unit normal vector (central differencing)
 $$\vec{n} = \nabla\phi/|\nabla\phi|$$
-3. velocity of surface
+$$\nabla\phi \approx \nabla\phi_{i,j} = \big[\phi_{i+1,j} - \phi_{i-1,j},\;\phi_{i,j+1} - \phi_{i,j-1}\big]$$
+where scaling factors are ignored since the $\vec{n}$ vector is ultimately normalized.
+
+2. velocity of surface
 $$w = \vec{u}_{fuel} + S\vec{n}$$
-4. Time derivative of level set
+3. Time derivative of level set
 $$\dot{\phi} = -(\vec{u}_f + S\vec{n})\cdot\nabla\phi$$
 	1. (upwind differencing for $\nabla\phi$)
+$$\nabla\phi \approx \nabla\phi_{i,j} = \big[\frac{\phi_{i+1,j} - \phi_{i,j}}{2h},\;\frac{\phi_{i,j+1} - \phi_{i,j}}{2h}\big]$$
+assuming the normal vector of the front points in the 3rd quadrant of the Cartesian plane.
 	2. Application of time derivative
-$$\phi_{t+1} = \phi_t -(\vec{u}_f + S\vec{n})\cdot\nabla\phi_t\frac{\Delta t}{h}$$
+$$\phi_{t+1} = \phi_t -(\vec{u}_f + S\vec{n})\cdot\nabla\phi_t\Delta t$$
 
 - evolve **fuel** and **hot gas** velocity fields separately
-## B) Velocity updated via Stam's 4-step loop[^3]
+## B) Intermediate Velocity calculated[^3]
+First 2 steps of Stam's 4-step loop are used to 
+- apply the effects of forces
+- advect the velocity field
 $$\vec{\text{w}}_0(\vec{x}) := \vec{u}(\vec{x},\; t)$$
 $$\vec{\text{w}}_0 = \vec{u}_t$$
 $$\vec{\text{w}}_0\rightarrow\text{add force}\rightarrow\vec{\text{w}}_1\rightarrow\text{advect}\rightarrow\vec{\text{w}}_2\rightarrow\text{diffuse}\rightarrow\vec{\text{w}}_3\rightarrow\text{project}\rightarrow\vec{\text{w}}_4$$
@@ -52,23 +82,49 @@ $$P_{-1} = P_0 - \vec{\text{w}}_1(P_{-1/2})\frac{\Delta t}{h}$$
 	4. sample velocity*
 $$\vec{\text{w}}_2(P_0) \approx \vec{\text{w}}_1(P_{-1}) \approx \text{bilinear\_sample}(\vec{\text{w}}_1,\; P_{-1})$$
 #### **\*Expansion coupling** across front via **ghost normal velocity** 
+i.e. when **hot gas** advection samples **fuel**, synthesize correct cross-interface value
 - (mass conservation) $\nabla\cdot\vec{u}=0$
-- i.e. when **hot gas** advection samples **fuel**, synthesize correct cross-interface value
+$$\rho_h(V_h - D) = \rho_f(V_f - D)$$
+$$D = V_f - S$$
+- Where $V$  and $D$ is the speed of the gas and and interface, both normal to the interface.
+- $S$ is the speed of the reaction of fuel into gas.
+
 	- $V_h^{ghost} = V_f + (\rho_f/\rho_h - 1)S$
 		- $V_f = \vec{u}_f\cdot\vec{n}$ (normal velocity of fuel)
 	- $\vec{u}_h^{ghost} = V_h^{ghost}\vec{n} + \vec{u}_f - (\vec{u}_f\cdot\vec{n})\vec{n}$
 	- $\vec{u}_h^{ghost} = (\rho_f/\rho_h - 1)S\vec{n} + \vec{u}_f$
-3. **Diffusion**
-- with implicit diffusion
-	- `diffuse_velocity`
-$$\pdv{\vec{\text{w}}_2}{t} = \nu\nabla^2\vec{\text{w}}_2$$
-$$\vec{\text{w}}_3 = \vec{\text{w}}_2 + (\nu\Delta t)\nabla^2\vec{\text{w}}_2$$
-4. **Projection**
-- Onto divergent free fields
-- and a Poisson solve for pressure
-	- `project_hot`
-$$\nabla^2q = \nabla\cdot\vec{\text{w}}_3$$
-$$\vec{\text{w}}_4 = \vec{\text{w}}_3 - \nabla q$$
+
+
+> [!NOTE]- Last 2 unused steps of Stam's 4-step loop
+> 3. **Diffusion**
+> - with implicit diffusion
+> 	- `diffuse_velocity`
+> $$\pdv{\vec{\text{w}}_2}{t} = \nu\nabla^2\vec{\text{w}}_2$$
+> $$\vec{\text{w}}_3 = \vec{\text{w}}_2 + (\nu\Delta t)\nabla^2\vec{\text{w}}_2$$
+> Or solve implicit equation
+> $$(\mathbf{I} - \nu\Delta t\nabla^2)\vec{\text{w}}_3 = \vec{\text{w}}_2$$
+> 3. **Projection**
+> - Onto divergent free fields
+> - and a Poisson solve for pressure
+> 	- `project_hot`
+> $$\nabla^2q = \nabla\cdot\vec{\text{w}}_3$$
+> $$\vec{\text{w}}_4 = \vec{\text{w}}_3 - \nabla q$$
+## C) Apply Pressure Gradient
+$$\vec{u} = \vec{u}^* - \frac{\Delta t}{\rho}\nabla p$$
+Choose $p$ which agrees with conservation of mass $\nabla\cdot\vec{u} = 0$
+$$\nabla^2 p= \frac{\rho}{\Delta t}(\nabla\cdot\vec{u}^*)$$
+1. Calculate (scaled) divergence of intermediate velocity field via central differencing
+$$\frac{\rho h^2}{4\Delta t}(\nabla\cdot\vec{u}^*) = \frac{\rho h}{8\Delta t}\Big[(u^{*(x)}_{i+1,j} - u^{*(x)}_{i-1,j}) + (u^{*(y)}_{i,j+1} - u^{*(y)}_{i,j-1})\Big]$$
+- plus/minus a correction term $\times N$, where $N$ counts how many of $p_{i\pm1,j}$ $p_{i,j\pm1}$ in step 2 cross the fuel/hot-gas interface, and the sign depends on cross-direction
+$$\frac{\rho h}{8\Delta t}\Big[(u^{*(x)}_{i+1,j} - u^{*(x)}_{i-1,j}) + (u^{*(y)}_{i,j+1} - u^{*(y)}_{i,j-1})\Big] \pm \Delta t(\rho_fS)^2\big(\frac{1}{\rho_f} - \frac{1}{\rho_h}\big)N$$
+2. Solve Poisson equation for Pressure
+	- Currently simple Jacobi solver used, with iteration step
+$$p^{k+1}_{ij} = \frac{1}{4}(p^k_{i+1,j} + p^k_{i-1,j} + p^k_{i,j+1} + p^k_{i,j-1} - \frac{\rho h^2}{\Delta t}(\nabla\cdot\vec{u}^*))$$
+3. Calculate and apply gradient of pressure field
+### Jump Condition for Pressure
+From conservation of momentum
+$$\rho_h(V_h - D)^2 + p_h = \rho_f(V_f - D)^2 + p_f$$
+$$p_h = p_f - \Delta t(\rho_f S)^2\big(\frac{1}{\rho_h} - \frac{1}{\rho_f}\big)$$
 ## **Reaction-time scalar Y** (advected + linear source)
 - (advected and decreased by 1 per unit time)
 - time since crossing blue core
