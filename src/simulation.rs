@@ -44,11 +44,14 @@ pub struct Sim<const NX: usize, const NY: usize, C> where C: Fn((f32, f32)) -> (
     param: Params,  // Simulation parameters (defined above)
     clamp_xy: C,   // clamping function for coordinates
 
-    u: Box<[[P<f32>; NY]; NX]>,      // velocity field (x, y)
-    p: Box<[[f32; NY]; NX]>,        // pressure field
-    div_u: Box<[[f32; NY]; NX]>,   // divergence of velocity field (∇·u)
+    u: Box<[[P<f32>; NY]; NX]>,     // velocity field (x, y)
+    p: Box<[[f32; NY]; NX]>,       // pressure field
+    div_u: Box<[[f32; NY]; NX]>,  // divergence of velocity field (∇·u)
 
-    phi: Box<[[f32; NY]; NX]>,        // level set (+pos in fuel region, -neg outside, 0 at boundary)
+    phi: Box<[[f32; NY]; NX]>,  // level set (+pos in fuel region, -neg outside, 0 at boundary)
+    front: Vec<P<usize>>,      // front of the level set (where φ==0)
+    band: Vec<P<usize>>,      // band of the level set (where |φ|<(6/h))
+    
     temp_gas: Box<[[f32; NY]; NX]>,  // temperature field (hot gas domain)
     rt: Box<[[f32; NY]; NX]>,       // reaction-time tracker (1 at fuel; decreases after crossing)
     dns: Box<[[f32; NY]; NX]>,     // smoke density (simple)
@@ -75,6 +78,9 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
             div_u: Box::new([[0.0; NY]; NX]),
 
             phi: Box::new([[1.0; NY]; NX]),
+            front: Vec::new(),
+            band: Vec::new(),
+
             temp_gas: Box::new([[param.temp_air; NY]; NX]),
             rt: Box::new([[0.0; NY]; NX]),
             dns: Box::new([[0.0; NY]; NX]),
@@ -93,12 +99,19 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         let mid = if NX%2 == 0 { NX/2 } else { NX/2 + 1 };
         for x in 0..NX {
             for y in 0..NY {
-                if y < 10 {
-                    self.phi[x][y] = 5.0;
-                    self.temp_gas[x][y] = self.param.temp_air + 10.0;
-                    self.u[x][y] = if (y == 0) && (mid - 4 < x && x < mid + 4) { P(0.0, 30.0) } else { P(0.0, 0.0) };
-                } else {
-                    self.phi[x][y] = -5.0;
+                match y {
+                    _ if y > 2 => (),
+                    2 => if mid - 4 < x && x < mid + 4 { self.phi[x][y] = 0.0 },
+                    1 => if mid - 5 < x && x < mid + 5 {
+                        if x < mid - 3 || x > mid + 3 { self.phi[x][y] = 0.0 }
+                        self.temp_gas[x][y] = self.param.temp_air + 10.0;
+                    },
+                    0 => if mid - 6 < x && x < mid + 6 {
+                        if x < mid - 4 || x > mid + 4 { self.phi[x][y] = 0.0 }
+                        self.temp_gas[x][y] = self.param.temp_air + 10.0;
+                        if mid - 5 < x && x < mid + 5 { self.u[x][y] = P(0.0, 30.0) };
+                    },
+                    _ => (),
                 }
             }
         }

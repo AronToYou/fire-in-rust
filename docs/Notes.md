@@ -4,12 +4,33 @@
 		- $\pm6$ from front is good balance
 		- proportional to $F$?
 		- based on values of $\phi$, add new points when necessary           
+	- once zero-band reaches Narrow Band boundary
+		- stop and rebuild
 - only do first 2 steps of Stam's 4-step loop
 	- instead solve Poisson for pressure like in `fire.pdf`
 - Page `140` of *Level set methods and fast marching methods* points towards
 	- extension velocity field to maintain signed distance function $|\nabla\phi|=1$
 
-- [ ] Fuel should be injected from solids using normal velocity:
+Sussman, M., Smereka, P. and Osher, S.J., A Level Set Method for
+Computing Solutions to Incompressible Two-Phase Flow, J. Comp. Phys.
+114, pp. 146-159, 1994.
+
+Chang, Y.C., Hou, T.Y., Merriman, B., and Osher, S.J., A Level Set
+Formulation of Eulerian Interface Capturing Methods for Incompressible
+Fluid Flows, Jour. Comp. Phys., 124, pp. 449-464, 1996.
+## CFL( Courant-Friedrichs-Lewy) Condition
+$$\pdv{w}{t} + u\pdv{w}{x} = 0$$
+$$C = \frac{\Delta t}{h}\leq C_{max} \approx  1$$
+## 18 Combustion (page 240/264)
+- $S_f$ depends on local curvature! (page 244/269)
+	- perturbation in closer contact with hot gas -> faster heating -> faster reaction
+	- $S_f^o$ - speed of planar flame
+	- $\kappa$- local curvature
+	- $L$ constant
+$$S_f = S_f^o(1 - L\kappa)$$
+- hydrodynamic advection
+- reaction
+- [ ] Fuel should be injected from solids using normal velocity (accounts for expansion):
 $$V_f = V_{solid} + (\rho_{solid}/\rho_f - 1)S$$
 
 This implementation utilizes flat 1D vectors instead of nested vectors (`Vec<Vec<f64>>`) to guarantee memory locality and cache efficiency, which is critical for high-performance scientific computing in Rust.
@@ -31,6 +52,8 @@ $\alpha \approx 0.15 m/(Ks^2)$
 # Fast Marching Level Set Method
 ---
 ### A Fast Marching Level Set Method for Monotonically Advancing Fronts
+- Due to upwind differencing, information propagates from smaller to larger values of $T$
+- hence choosing smallest value of $T$ ensures the most accurate value of $T$
 1. Initialize
 	1)  (Alive points: shaded points): Let $A$ be the set of all grid points $\{i,j=1\}$; 
 		- set $T_{i,1} = 0.0$ for all points in $A$.
@@ -47,10 +70,13 @@ $\alpha \approx 0.15 m/(Ks^2)$
 	4) Recompute $T$ at all neighbors according to Eq. 8, selecting the largest possible solution to the quadratic equation.
 	5) Return to top of Loop.
 
+$$\phi_t + F(x,y,z)|\nabla\phi| = 0$$
+$$\phi(\vec{x},t=0) = \Gamma$$
+
 In this framework, start with
 - front at $y=0$
 - $F(x,y) > 0$ and periodic in $x$
-Upwind gradient is approximated as:
+Upwind gradient is approximated as (**Eq. 8**):
 $$\big[\max(\max(D_{ij}^{-x}T,\:0),\;-\min(D_{ij}^{+x}T,\:0))^2 + \max(\max(D_{ij}^{-y}T,\:0),\;-\min(D_{ij}^{+y}T,\:0))^2\big] = 1/F_{ij}^2$$
 where
 $$D_{ij}^{+x}\phi = (\phi_{i+1,\ j} - \phi_{i,j})/(\Delta x)$$

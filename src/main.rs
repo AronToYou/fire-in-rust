@@ -9,7 +9,7 @@ fn main() {
 
         visc: 0.0005,      // kinematic viscosity [m^2/s] (for velocity diffusion)
         k_diff: 0.0001,    // diffusion constant  [m^2/s] (for scalar diffusion)
-        k_buoy: 0.05,      // buoyancy constant   [N/K]   (for buoyancy force)
+        k_buoy: 0.15,      // buoyancy constant   [N/K]   (for buoyancy force)
         temp_air: 300.0,   // ambient air temperature [K]
         temp_max: 2200.0,  // peak flame temperature  [K]
         k_cool: 3000.0,  // cooling constant        [K/s]
