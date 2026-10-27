@@ -27,7 +27,8 @@ pub struct Params {
     pub temp_air: f32,  // ambient air temperature [K]
     pub temp_max: f32,  // peak flame temperature  [K]
     pub k_cool: f32,    // cooling constant        [K/s]
-    pub vconf: f32,     // vorticity confinement   [1/s]
+    pub vconf_h: f32,     // vorticity confinement   [1/s]
+    pub vconf_f: f32,     // vorticity confinement   [1/s]
     pub s: f32,         // reaction rate      [m/s]
     pub d_fuel: f32,    // denisty of fuel    [kg/m^3]
     pub d_hgas: f32,    // density of hot gas [kg/m^3]
@@ -89,12 +90,13 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
 
     /// Initialize fuel inlet at bottom of domain
     fn init_fuel_inlet(&mut self) {
+        let mid = if NX%2 == 0 { NX/2 } else { NX/2 + 1 };
         for x in 0..NX {
             for y in 0..NY {
                 if y < 10 {
                     self.phi[x][y] = 5.0;
                     self.temp_gas[x][y] = self.param.temp_air + 10.0;
-                    self.u[x][y] = if y == 0 { P(0.0, 1.5) } else { P(0.0, 0.0) };
+                    self.u[x][y] = if (y == 0) && (mid - 4 < x && x < mid + 4) { P(0.0, 30.0) } else { P(0.0, 0.0) };
                 } else {
                     self.phi[x][y] = -5.0;
                 }
@@ -137,6 +139,18 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
         self.apply_boundary_conditions();
     }
 
+    /// Reset level set values to maintain signed distance function property (|∇φ|=1) using fast marching method
+    fn reinitialize_levelset(&mut self) {
+        let (phi, tmp) = (&*self.phi, &mut *self.tmp);
+        for x in 0..NX {
+            for y in 0..NY {
+                if phi[x][y].abs() < 0.01 {
+                    
+                }
+            }
+        }
+        std::mem::swap(&mut *self.phi, &mut *self.tmp);
+    }
 
     // ---------------------------------- A) Thin-flame Level Set Propagation ----------------------------------
     /// Updates the level set using upwind one-sided differencing to estimate spatial derivatives
@@ -200,7 +214,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
                 vorticity[x][y] = dv_dx - du_dy;
             }
         }
-        let (vconf, h, dt) = (self.param.vconf, self.param.h, self.param.dt);
+        let (vconf_h, vconf_f, h, dt) = (self.param.vconf_h, self.param.vconf_f, self.param.h, self.param.dt);
         for x in 1..NX-1 {
             for y in 1..NY-1 {
                 // B) 1.2.2 (unscaled) Central differencing for normed gradient N = (∇|ω|/|∇|ω||) //
@@ -209,6 +223,7 @@ impl<const NX: usize, const NY: usize, C> Sim<NX, NY, C> where C: Fn((f32, f32))
                 let norm = (gx*gx + gy*gy).sqrt().max(MIN_NORM);  // gradient norm
 
                 // B) 1.2.3 (scaled) Force of vorticity confinement εh(N x ω) //
+                let vconf = if self.phi[x][y] > 0.0 { vconf_f } else { vconf_h };
                 force[x][y] += P(-gy, gx)*vorticity[x][y]*(vconf*h/norm);
 
                 // B) 1.3 Add force //

@@ -3,20 +3,21 @@ use indicatif::ProgressIterator;
 use fire_in_rust::{new_sim, Params, Field};
 
 fn main() {
-    let mut sim = new_sim::<240, 320>(Params {
-        h: 1.0,
-        dt: 0.5,
+    let mut sim = new_sim::<120, 160>(Params {
+        h: 0.05,    // grid cell length     [m]
+        dt: 0.5,    // simulation time step [s]
 
-        visc: 0.0005,
-        k_diff: 0.0001,
-        k_buoy: 0.05,
-        temp_air: 300.0,
-        temp_max: 2200.0,
-        k_cool: 0.002,
-        vconf: 2.0,
-        s: 0.7,
-        d_fuel: 1.0,
-        d_hgas: 0.1,
+        visc: 0.0005,      // kinematic viscosity [m^2/s] (for velocity diffusion)
+        k_diff: 0.0001,    // diffusion constant  [m^2/s] (for scalar diffusion)
+        k_buoy: 0.05,      // buoyancy constant   [N/K]   (for buoyancy force)
+        temp_air: 300.0,   // ambient air temperature [K]
+        temp_max: 2200.0,  // peak flame temperature  [K]
+        k_cool: 3000.0,  // cooling constant        [K/s]
+        vconf_f: 16.0,   // vorticity confinement   [1/s] (for fuel)
+        vconf_h: 60.0,   // vorticity confinement   [1/s] (for hot gas)
+        s: 0.5,         // reaction rate      [m/s] (.44 for propane premixed with oxidizer)
+        d_fuel: 1.0,    // denisty of fuel    [kg/m^3]
+        d_hgas: 0.01,    // density of hot gas [kg/m^3] (0.1)
 
         render_scale: 1.0
     });

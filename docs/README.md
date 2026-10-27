@@ -1,4 +1,5 @@
 # Outline
+---
 ## Incompressible Navier-Stokes
 $$\pdv{\vec{u}}{t} = -(\vec{u}\cdot\nabla)\vec{u} - \frac{1}{\rho}\nabla p + \nu\nabla^2\vec{u} + \vec{f}$$
 $$\nabla\cdot\vec{u} = 0$$
@@ -26,6 +27,7 @@ Since the front also moves due to the reaction of fuel into hot combusted gas it
 $$\dot{\phi} + (\vec{u}_{fuel} + \vec{n}S)\cdot\nabla\phi = 0$$
 where $S$ is the reaction speed and $\vec{n}=\nabla\phi/|\nabla\phi|$ is the normal vector to the reaction front.
 # Implemented Procedure
+---
 ## A) **Thin flame** tracked by **level set** $\phi$[^1]
 Implicit surface where ($\phi=0$) defines the interface between
 - **Fuel** ($\phi>0$) blue-core reaction zone
@@ -159,9 +161,8 @@ $T_t = -(\vec{u}\cdot\nabla)T - c_T\Big(\frac{T - T_{air}}{T_{max} - T_{air}}\Bi
 	- pressure jump conditions not enforced in the linear system
 
 
-
-
 # Miscellaneous Notes
+---
 ## Discretization
 ### Staggered Field Grids[^2]
 #### Velocity Field
